@@ -1,0 +1,9 @@
+---
+
+deploy_user: deploy
+deploy_user_uid: 2000
+deploy_user_groups:
+  - sudo
+deploy_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDIZak62dHFoQL3Co/XYs8SC6Lc/FnCT8xOiHu2SJAWO"
+
+ansible_user: "{{ deploy_user }}"

@@ -1,0 +1,6 @@
+---
+
+- name: Apply common tweaks
+  hosts: all
+  roles:
+    - common

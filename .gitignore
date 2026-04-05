@@ -1,3 +1,4 @@
 .ssh/
 .venv/
 .ansible/
+.ansible_vault.pass
