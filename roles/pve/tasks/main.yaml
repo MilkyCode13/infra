@@ -3,13 +3,11 @@
   ansible.builtin.deb822_repository:
     name: pve-enterprise
     state: absent
-  notify: Update packages
 
 - name: Disable ceph repository
   ansible.builtin.deb822_repository:
     name: ceph
     state: absent
-  notify: Update packages
 
 - name: Add pve-no-subscription repository
   ansible.builtin.deb822_repository:
