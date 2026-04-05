@@ -10,7 +10,7 @@
   ansible.builtin.deb822_repository:
     name: pve-no-subscription
     uris: http://download.proxmox.com/debian/pve
-    suites: '{{ ansible_distribution_release }}'
+    suites: '{{ ansible_facts["distribution_release"] }}'
     components: pve-no-subscription
     signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
     state: present
@@ -20,13 +20,13 @@
   ansible.builtin.meta: flush_handlers
 
 - name: Install Intel microcode
-  when: ansible_processor | lower is search('intel')
+  when: ansible_facts["processor"] | lower is search('intel')
   ansible.builtin.apt:
     name: intel-microcode
     state: present
 
 - name: Install AMD microcode
-  when: ansible_processor | lower is search('amd')
+  when: ansible_facts["processor"] | lower is search('amd')
   ansible.builtin.apt:
     name: amd64-microcode
     state: present
