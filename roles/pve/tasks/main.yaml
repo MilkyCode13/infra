@@ -84,3 +84,48 @@
             setTimeout(() => {observer.disconnect();}, 10000);
           </script>
         state: present
+
+- name: Configure deploy API key
+  block:
+    - name: Create deploy user
+      community.proxmox.proxmox_user:
+        api_host: "{{ inventory_hostname }}"
+        api_user: root@pam
+        api_password: "{{ pve_password }}"
+        validate_certs: false
+        userid: "{{ deploy_user }}@pve"
+        tokens:
+          - tokenid: deploy
+            privsep: false
+        state: present
+      delegate_to: localhost
+      register: pve_deploy_user_result
+
+    - name: Save token to local file
+      vars:
+        pve_token_name: "{{ deploy_user }}"
+      ansible.builtin.template:
+        src: token.j2
+        dest: "../.secrets/pve/deploy_{{ inventory_hostname }}.txt"
+        mode: "0640"
+      when: "'secrets' in pve_deploy_user_result"
+      delegate_to: localhost
+
+    - name: Set token variable
+      ansible.builtin.set_fact:
+        pve_deploy_token:
+          "{{ pve_deploy_user_result.secrets[deploy_user] if 'secrets' in pve_deploy_user_result
+          else lookup('ansible.builtin.file', '../.secrets/pve/deploy_%s.txt' % inventory_hostname ) }}"
+
+    - name: Add permissions to deploy user
+      community.proxmox.proxmox_access_acl:
+        api_host: "{{ inventory_hostname }}"
+        api_user: root@pam
+        api_password: "{{ pve_password }}"
+        validate_certs: false
+        ugid: "{{ deploy_user }}@pve"
+        roleid: Administrator
+        path: /
+        type: user
+        state: present
+      delegate_to: localhost
