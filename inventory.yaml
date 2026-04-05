@@ -1,0 +1,6 @@
+pve:
+  hosts:
+    nas:
+      ansible_host: 10.19.1.11
+  vars:
+    ansible_user: root
