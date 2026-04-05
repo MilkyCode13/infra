@@ -1,11 +1,4 @@
 ---
 
-- name: Update packages
-  ansible.builtin.apt:
-    update_cache: true
-    upgrade: dist
-  notify: Remove nag
-
-- name: Remove nag
-  ansible.builtin.script:
-    cmd: remove_nag.sh
+- name: Reboot
+  ansible.builtin.reboot:

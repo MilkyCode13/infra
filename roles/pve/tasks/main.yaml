@@ -1,10 +1,15 @@
 ---
-
 - name: Disable pve-enterprise repository
   ansible.builtin.deb822_repository:
     name: pve-enterprise
-    enabled: false
-    state: present
+    state: absent
+  notify: Update packages
+
+- name: Disable ceph repository
+  ansible.builtin.deb822_repository:
+    name: ceph
+    state: absent
+  notify: Update packages
 
 - name: Add pve-no-subscription repository
   ansible.builtin.deb822_repository:
@@ -14,19 +19,69 @@
     components: pve-no-subscription
     signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
     state: present
-  notify: Update packages
+
+- name: Update packages
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+  notify: Reboot
 
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
+
+- name: Remove nag
+  ansible.builtin.replace:
+    path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+    regexp: 'res\.data\.status.*$'
+    replace: "res.data.status.toLowerCase() == 'NoMoreNagging'"
+
+- name: Remove mobile nag
+  ansible.builtin.blockinfile:
+    path: /usr/share/pve-yew-mobile-gui/index.html.tpl
+    marker: "<!-- {mark} ANSIBLE MANAGED BLOCK FOR MOBILE NAG -->"
+    block: |
+      <script>
+        function removeSubscriptionElements() {
+          // --- Remove subscription dialogs ---
+          const dialogs = document.querySelectorAll('dialog.pwt-outer-dialog');
+          dialogs.forEach(dialog => {
+            const text = (dialog.textContent || '').toLowerCase();
+            if (text.includes('subscription')) {
+              dialog.remove();
+              console.log('Removed subscription dialog');
+            }
+          });
+
+          // --- Remove subscription cards, but keep Reboot/Shutdown/Console ---
+          const cards = document.querySelectorAll('.pwt-card.pwt-p-2.pwt-d-flex.pwt-interactive.pwt-justify-content-center');
+          cards.forEach(card => {
+            const text = (card.textContent || '').toLowerCase();
+            const hasButton = card.querySelector('button');
+            if (!hasButton && text.includes('subscription')) {
+              card.remove();
+              console.log('Removed subscription card');
+            }
+          });
+        }
+
+        const observer = new MutationObserver(removeSubscriptionElements);
+        observer.observe(document.body, { childList: true, subtree: true });
+        removeSubscriptionElements();
+        setInterval(removeSubscriptionElements, 300);
+        setTimeout(() => {observer.disconnect();}, 10000);
+      </script>
+    state: present
 
 - name: Install Intel microcode
   when: ansible_facts["processor"] | lower is search('intel')
   ansible.builtin.apt:
     name: intel-microcode
     state: present
+  notify: Reboot
 
 - name: Install AMD microcode
   when: ansible_facts["processor"] | lower is search('amd')
   ansible.builtin.apt:
     name: amd64-microcode
     state: present
+  notify: Reboot
