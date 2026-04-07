@@ -129,3 +129,103 @@
         type: user
         state: present
       delegate_to: localhost
+
+- name: Configure bridge VLANs
+  community.proxmox.proxmox_node_network:
+    api_host: "{{ inventory_hostname }}"
+    api_user: "{{ deploy_user }}@pve"
+    api_token_id: deploy
+    api_token_secret: "{{ pve_deploy_token }}"
+    validate_certs: false
+    node: "{{ inventory_hostname }}"
+    iface: vmbr0
+    iface_type: bridge
+    bridge_vlan_aware: true
+    state: present
+  delegate_to: localhost
+
+- name: Apply network configuration
+  community.proxmox.proxmox_node_network:
+    api_host: "{{ inventory_hostname }}"
+    api_user: "{{ deploy_user }}@pve"
+    api_token_id: deploy
+    api_token_secret: "{{ pve_deploy_token }}"
+    validate_certs: false
+    node: "{{ inventory_hostname }}"
+    state: apply
+  delegate_to: localhost
+
+- name: Prepare VM templates
+  block:
+    - name: Import QEMU VM images
+      community.proxmox.proxmox_template:
+        api_host: "{{ inventory_hostname }}"
+        api_user: "{{ deploy_user }}@pve"
+        api_token_id: deploy
+        api_token_secret: "{{ pve_deploy_token }}"
+        validate_certs: false
+        node: "{{ inventory_hostname }}"
+        content_type: import
+        template: "{{ item.template }}"
+        url: "{{ item.url }}"
+        state: present
+      delegate_to: localhost
+      loop: "{{ pve_vm_images }}"
+
+    # - name: Get current template VM status
+    #   community.proxmox.proxmox_kvm:
+    #     api_host: "{{ inventory_hostname }}"
+    #     api_user: "{{ deploy_user }}@pve"
+    #     api_token_id: deploy
+    #     api_token_secret: "{{ pve_deploy_token }}"
+    #     validate_certs: false
+    #     node: "{{ inventory_hostname }}"
+    #     vmid: "{{ item.vmid }}"
+    #     state: current
+    #   delegate_to: localhost
+    #   loop: "{{ pve_vm_images }}"
+    #   ignore_errors: true
+    #   register: pve_template_vm_status
+
+    # - name: Print result
+    #   ansible.builtin.debug:
+    #     var: pve_template_vm_status
+
+    - name: Create QEMU template VM
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ inventory_hostname }}"
+        api_user: "{{ deploy_user }}@pve"
+        api_token_id: deploy
+        api_token_secret: "{{ pve_deploy_token }}"
+        validate_certs: false
+        node: "{{ inventory_hostname }}"
+        vmid: "{{ item.vmid }}"
+        name: "{{ item.name }}"
+        machine: q35
+        cpu: x86-64-v2-AES
+        scsihw: virtio-scsi-pci
+        scsi:
+          scsi0: "local-lvm:0,import-from=local:import/{{ item.template }}"
+        ide:
+          ide2: "local-lvm:cloudinit"
+        boot: order=scsi0
+        serial:
+          serial0: socket
+        vga: serial0
+        state: present
+      delegate_to: localhost
+      loop: "{{ pve_vm_images }}"
+
+    - name: Convert VM to template
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ inventory_hostname }}"
+        api_user: "{{ deploy_user }}@pve"
+        api_token_id: deploy
+        api_token_secret: "{{ pve_deploy_token }}"
+        validate_certs: false
+        node: "{{ inventory_hostname }}"
+        vmid: "{{ item.vmid }}"
+        name: "{{ item.name }}"
+        state: template
+      delegate_to: localhost
+      loop: "{{ pve_vm_images }}"
