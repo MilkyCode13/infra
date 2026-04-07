@@ -1,0 +1,18 @@
+name: Test
+on:
+  - push
+  - pull_request
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+      - run: pip install -r requirements.txt
+      - run: ansible-galaxy install -r requirements.yaml
+      - run: echo "$ANSIBLE_VAULT_PASSWORD" > .ansible_vault.pass
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+      - run: ansible-lint
