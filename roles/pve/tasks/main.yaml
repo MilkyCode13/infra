@@ -113,9 +113,9 @@
 
     - name: Set token variable
       ansible.builtin.set_fact:
-        pve_deploy_token:
-          "{{ pve_deploy_user_result.secrets[deploy_user] if 'secrets' in pve_deploy_user_result
-          else lookup('ansible.builtin.file', '../.secrets/pve/deploy_%s.txt' % inventory_hostname ) }}"
+        pve_deploy_token: >-
+          {{ pve_deploy_user_result.secrets[deploy_user] if 'secrets' in pve_deploy_user_result
+          else lookup('ansible.builtin.file', '../.secrets/pve/deploy_%s.txt' % inventory_hostname) }}
 
     - name: Add permissions to deploy user
       community.proxmox.proxmox_access_acl:
