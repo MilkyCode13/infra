@@ -3,3 +3,7 @@
 .ansible/
 .ansible_vault.pass
 .secrets/
+.terraform/
+secrets.tfvars
+*.tfstate
+*.tfstate.*
