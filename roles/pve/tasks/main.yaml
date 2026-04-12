@@ -170,26 +170,8 @@
         url: "{{ item.url }}"
         state: present
       delegate_to: localhost
+      timeout: 300
       loop: "{{ pve_vm_images }}"
-
-    # - name: Get current template VM status
-    #   community.proxmox.proxmox_kvm:
-    #     api_host: "{{ inventory_hostname }}"
-    #     api_user: "{{ deploy_user }}@pve"
-    #     api_token_id: deploy
-    #     api_token_secret: "{{ pve_deploy_token }}"
-    #     validate_certs: false
-    #     node: "{{ inventory_hostname }}"
-    #     vmid: "{{ item.vmid }}"
-    #     state: current
-    #   delegate_to: localhost
-    #   loop: "{{ pve_vm_images }}"
-    #   ignore_errors: true
-    #   register: pve_template_vm_status
-
-    # - name: Print result
-    #   ansible.builtin.debug:
-    #     var: pve_template_vm_status
 
     - name: Create QEMU template VM
       community.proxmox.proxmox_kvm:

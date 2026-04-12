@@ -1,0 +1,219 @@
+---
+- name: Enable IP forwarding
+  become: true
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+
+- name: Install containerd
+  become: true
+  block:
+    - name: Add Docker repository
+      ansible.builtin.yum_repository:
+        name: docker-ce-stable
+        description: Docker CE Stable - $basearch
+        baseurl: https://download.docker.com/linux/rhel/$releasever/$basearch/stable
+        gpgcheck: true
+        gpgkey: https://download.docker.com/linux/rhel/gpg
+        state: present
+
+    - name: Install contrainerd package
+      ansible.builtin.dnf:
+        name: containerd.io
+        state: present
+
+    - name: Remove cri from disabled plugins
+      ansible.builtin.lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: "^disabled_plugins"
+        state: absent
+      notify: Restart containerd
+
+    - name: Enable and start containerd service
+      ansible.builtin.systemd_service:
+        name: containerd
+        state: started
+        enabled: true
+
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+
+- name: Install Kubernetes packages
+  become: true
+  block:
+    - name: Set SELinux to permissive mode
+      ansible.posix.selinux:
+        policy: targeted
+        state: permissive
+
+    - name: Add Kubernetes repository
+      ansible.builtin.yum_repository:
+        name: kubernetes
+        description: Kubernetes
+        baseurl: https://pkgs.k8s.io/core:/stable:/v1.35/rpm/
+        gpgcheck: true
+        gpgkey: https://pkgs.k8s.io/core:/stable:/v1.35/rpm/repodata/repomd.xml.key
+        exclude:
+          - kubelet
+          - kubeadm
+          - kubectl
+          - cri-tools
+          - kubernetes-cni
+        state: present
+
+    - name: Install Kubernetes packages
+      ansible.builtin.dnf:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        disable_excludes: kubernetes
+        state: present
+
+- name: Install additional packages
+  become: true
+  block:
+    - name: Install EPEL repository
+      ansible.builtin.dnf:
+        name:
+          - epel-release
+        state: present
+
+    - name: Install packages
+      ansible.builtin.dnf:
+        name:
+          - helm3
+          - python3-kubernetes
+          - python3-cryptography
+        state: present
+
+- name: Check Kubernetes status
+  become: true
+  any_errors_fatal: true
+  block:
+    - name: Check kubeconfig presence
+      when: k8s_master_group in group_names
+      ansible.builtin.stat:
+        path: /etc/kubernetes/admin.conf
+      register: k8s_kubeconfig
+
+    - name: Set node configured
+      when: k8s_master_group in group_names
+      ansible.builtin.set_fact:
+        k8s_master_node_ready: "{{ k8s_kubeconfig.stat.exists }}"
+
+    - name: Check if any master is configured
+      ansible.builtin.set_fact:
+        k8s_any_master_ready: "{{ groups[k8s_master_group] | map('extract', hostvars, 'k8s_master_node_ready') is any }}"
+
+    - name: Choose first master
+      ansible.builtin.set_fact:
+        k8s_first_master: >-
+          {{ k8s_any_master_ready | ternary(
+            groups[k8s_master_group] | map('extract', hostvars) | selectattr('k8s_master_node_ready') | map(attribute='inventory_hostname') | first,
+            groups[k8s_master_group] | first
+          ) }}
+
+- name: Provision first master node
+  become: true
+  when: inventory_hostname == k8s_first_master and not k8s_any_master_ready
+  any_errors_fatal: true
+  block:
+    - name: Prepare initial kube-vip manifest
+      vars:
+        k8s_pre_init: true
+      ansible.builtin.template:
+        src: kube-vip.yaml.j2
+        dest: /etc/kubernetes/manifests/kube-vip.yaml
+        mode: "0644"
+
+    - name: Init Kubernetes first master
+      ansible.builtin.command:
+        cmd: kubeadm init --control-plane-endpoint {{ k8s_endpoint }}:6443
+        creates: /etc/kubernetes/admin.conf
+
+- name: Wait for API to be up
+  ansible.builtin.wait_for:
+    host: "{{ k8s_endpoint }}"
+    port: 6443
+    state: started
+
+- name: Install initial addons
+  become: true
+  when: k8s_master_group in group_names
+  any_errors_fatal: true
+  block:
+    - name: Prepare kube-vip manifest
+      ansible.builtin.template:
+        src: kube-vip.yaml.j2
+        dest: /etc/kubernetes/manifests/kube-vip.yaml
+        mode: "0644"
+
+    - name: Install Cilium
+      when: inventory_hostname == k8s_first_master
+      kubernetes.core.helm:
+        binary_path: helm3
+        kubeconfig: /etc/kubernetes/admin.conf
+        name: cilium
+        chart_ref: oci://quay.io/cilium/charts/cilium
+        chart_version: "1.19.2"
+        namespace: kube-system
+
+- name: Get node status
+  become: true
+  any_errors_fatal: true
+  block:
+    - name: Get node list
+      when: inventory_hostname == k8s_first_master
+      kubernetes.core.k8s_info:
+        kubeconfig: /etc/kubernetes/admin.conf
+        kind: Node
+      register: k8s_node
+
+    - name: Set node vars
+      ansible.builtin.set_fact:
+        k8s_node_joined: "{{ hostvars[k8s_first_master].k8s_node.resources | map(attribute='metadata.name') is contains(ansible_facts['fqdn']) }}"
+
+    - name: Set any not joined
+      ansible.builtin.set_fact:
+        k8s_any_node_not_joined: "{{ not ansible_play_hosts | map('extract', hostvars, 'k8s_node_joined') is all }}"
+
+    - name: Debug
+      ansible.builtin.debug:
+        msg: "joined={{ k8s_node_joined }} anyleft={{ k8s_any_node_not_joined }}"
+
+- name: Get join credentials
+  become: true
+  when: k8s_any_node_not_joined
+  any_errors_fatal: true
+  block:
+    - name: Get join token
+      when: inventory_hostname == k8s_first_master
+      ansible.builtin.command:
+        cmd: kubeadm token list -o jsonpath={.token}
+      changed_when: false
+      register: k8s_join_token_result
+
+    - name: Get discovery token CA cert
+      when: inventory_hostname == k8s_first_master
+      community.crypto.x509_certificate_info:
+        path: /etc/kubernetes/pki/ca.crt
+      register: k8s_ca_cert_result
+
+    - name: Save tokens
+      ansible.builtin.set_fact:
+        k8s_join_token: "{{ hostvars[k8s_first_master].k8s_join_token_result.stdout }}"
+        k8s_discovery_token_ca_cert_hash: "{{ hostvars[k8s_first_master].k8s_ca_cert_result.public_key_fingerprints.sha256 | replace(':', '') }}"
+
+- name: Provision Kubernetes worker nodes
+  become: true
+  when: not k8s_node_joined
+  block:
+    - name: Join cluster
+      ansible.builtin.command:
+        cmd: kubeadm join --token {{ k8s_join_token }} {{ k8s_endpoint }}:6443 --discovery-token-ca-cert-hash sha256:{{ k8s_discovery_token_ca_cert_hash }}
+      changed_when: true
+      notify: Rebalance coredns

@@ -1,0 +1,9 @@
+---
+k8s_master_group: k8s_master
+k8s_worker_group: k8s_worker
+k8s_endpoint: ""
+k8s_pre_init: false
+k8s_master_node_ready: false
+k8s_any_master_ready: false
+k8s_first_master: ""
+k8s_node_joined: false

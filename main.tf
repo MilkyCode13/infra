@@ -22,6 +22,11 @@ provider "openwrt" {
   password = var.openwrt_password
 }
 
+resource "openwrt_dhcp_domain" "kube_master" {
+  name = "kube-master"
+  ip = "10.19.1.20"
+}
+
 module "kube_master1" {
   source = "./modules/vm"
 
@@ -41,7 +46,7 @@ module "kube_node1" {
   node = "nas"
   vm_id = 201
   template_id = 9001
-  cpu_cores = 2
-  memory = 2048
+  cpu_cores = 8
+  memory = 8192
   ip_cidr = "10.19.1.31/24"
 }

@@ -1,0 +1,4 @@
+---
+k8s_endpoint: kube-master
+k8s_vip_interface: eth0
+k8s_vip_address: 10.19.1.20
