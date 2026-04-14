@@ -7,3 +7,6 @@ k8s_master_node_ready: false
 k8s_any_master_ready: false
 k8s_first_master: ""
 k8s_node_joined: false
+k8s_flux_sync_repo: "https://github.com/MilkyCode13/infra.git"
+k8s_flux_sync_ref: refs/heads/main
+k8s_flux_sync_path: clusters/default
