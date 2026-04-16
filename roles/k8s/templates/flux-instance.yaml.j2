@@ -12,7 +12,7 @@ spec:
     type: kubernetes
     size: small
   sync:
-    kind: GitRepository
+    kind: {{ k8s_flux_sync_kind }}
     url: "{{ k8s_flux_sync_repo }}"
     ref: {{ k8s_flux_sync_ref }}
     path: {{ k8s_flux_sync_path }}

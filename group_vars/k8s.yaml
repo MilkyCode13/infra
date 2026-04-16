@@ -2,6 +2,7 @@
 k8s_endpoint: kube-master
 k8s_vip_interface: eth0
 k8s_vip_address: 10.19.1.20
-k8s_flux_sync_repo: "https://github.com/MilkyCode13/infra.git"
-k8s_flux_sync_ref: refs/heads/k8s-cluster
+k8s_flux_sync_kind: OCIRepository
+k8s_flux_sync_repo: "oci://ghcr.io/milkycode13/manifests/infra"
+k8s_flux_sync_ref: staging
 k8s_flux_sync_path: clusters/staging
