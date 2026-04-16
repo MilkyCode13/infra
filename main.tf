@@ -34,8 +34,8 @@ module "kube_master1" {
   node = "nas"
   vm_id = 101
   template_id = 9001
-  cpu_cores = 2
-  memory = 2048
+  cpu_cores = 4
+  memory = 4096
   ip_cidr = "10.19.1.21/24"
 }
 

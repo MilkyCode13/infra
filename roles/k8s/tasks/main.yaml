@@ -152,6 +152,13 @@
         dest: /etc/kubernetes/manifests/kube-vip.yaml
         mode: "0644"
 
+    - name: Wait for API to be up
+      ansible.builtin.wait_for:
+        host: "{{ k8s_endpoint }}"
+        port: 6443
+        state: started
+        delay: 5
+
     - name: Install Cilium
       when: inventory_hostname == k8s_first_master
       kubernetes.core.helm:
