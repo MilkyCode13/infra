@@ -28,12 +28,12 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Push artifact
         run: |
-          flux push artifact oci://ghcr.io/MilkyCode13/manifests/infra:$(git rev-parse --short HEAD) \
+          flux push artifact oci://ghcr.io/milkycode13/manifests/infra:$(git rev-parse --short HEAD) \
             --path="." \
             --source="$(git config --get remote.origin.url)" \
             --revision="$(git branch --show-current)@sha1:$(git rev-parse HEAD)"
       - name: Tag staging
-        run: flux tag artifact oci://ghcr.io/MilkyCode13/manifests/infra:$(git rev-parse --short HEAD) --tag staging
+        run: flux tag artifact oci://ghcr.io/milkycode13/manifests/infra:$(git rev-parse --short HEAD) --tag staging
       - name: Tag latest
         if: github.ref_name == 'main'
-        run: flux tag artifact oci://ghcr.io/MilkyCode13/manifests/infra:$(git rev-parse --short HEAD) --tag latest
+        run: flux tag artifact oci://ghcr.io/milkycode13/manifests/infra:$(git rev-parse --short HEAD) --tag latest
