@@ -37,4 +37,3 @@ jobs:
       - name: Tag latest
         if: github.ref_name == 'main'
         run: flux tag artifact oci://ghcr.io/MilkyCode13/manifests/infra:$(git rev-parse --short HEAD) --tag latest
-
