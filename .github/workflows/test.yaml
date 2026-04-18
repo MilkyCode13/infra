@@ -16,3 +16,27 @@ jobs:
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
       - run: ansible-lint
+
+  publish-flux-artifact:
+    name: Publish Flux Artifact
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: fluxcd/flux2/action@main
+      - name: Log in to registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Push artifact
+        run: |
+          flux push artifact oci://ghcr.io/milkycode13/manifests/infra:$(git rev-parse --short HEAD) \
+            --path="." \
+            --source="$(git config --get remote.origin.url)" \
+            --revision="$(git branch --show-current)@sha1:$(git rev-parse HEAD)"
+      - name: Tag staging
+        run: flux tag artifact oci://ghcr.io/milkycode13/manifests/infra:$(git rev-parse --short HEAD) --tag staging
+      - name: Tag latest
+        if: github.ref_name == 'main'
+        run: flux tag artifact oci://ghcr.io/milkycode13/manifests/infra:$(git rev-parse --short HEAD) --tag latest
