@@ -1,5 +1,7 @@
 ---
 
+pve_vm_image_storage: local
+pve_vm_disk_storage: local-lvm
 pve_vm_images:
   - name: almalinux-9
     vmid: 9001

@@ -48,6 +48,11 @@
         regexp: 'res\.data\.status.*$'
         replace: "res.data.status.toLowerCase() == 'NoMoreNagging'"
 
+    - name: Get mobile file stat
+      ansible.builtin.stat:
+        path: /usr/share/pve-yew-mobile-gui/index.html.tpl
+      register: pve_nag_mobile_stat
+
     - name: Mobile
       ansible.builtin.blockinfile:
         path: /usr/share/pve-yew-mobile-gui/index.html.tpl
@@ -84,6 +89,7 @@
             setTimeout(() => {observer.disconnect();}, 10000);
           </script>
         state: present
+      when: pve_nag_mobile_stat.stat.exists
 
 - name: Configure deploy API key
   block:
@@ -165,12 +171,13 @@
         api_token_secret: "{{ pve_deploy_token }}"
         validate_certs: false
         node: "{{ inventory_hostname }}"
+        storage: "{{ pve_vm_image_storage }}"
         content_type: import
         template: "{{ item.template }}"
         url: "{{ item.url }}"
         state: present
+        timeout: 300
       delegate_to: localhost
-      timeout: 300
       loop: "{{ pve_vm_images }}"
 
     - name: Create QEMU template VM
@@ -187,9 +194,9 @@
         cpu: x86-64-v2-AES
         scsihw: virtio-scsi-pci
         scsi:
-          scsi0: "local-lvm:0,import-from=local:import/{{ item.template }}"
+          scsi0: "{{ pve_vm_disk_storage }}:0,import-from={{ pve_vm_image_storage }}:import/{{ item.template }}"
         ide:
-          ide2: "local-lvm:cloudinit"
+          ide2: "{{ pve_vm_disk_storage }}:cloudinit"
         boot: order=scsi0
         serial:
           serial0: socket

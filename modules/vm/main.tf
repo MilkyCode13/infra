@@ -1,48 +1,49 @@
 resource "openwrt_dhcp_domain" "dns" {
   name = var.name
-  ip = split("/", var.ip_cidr)[0]
+  ip   = split("/", var.config.ip_cidr)[0]
 }
 
 resource "proxmox_virtual_environment_vm" "vm" {
   name      = var.name
-  node_name = var.node
-  vm_id     = var.vm_id
+  node_name = var.config.node
+  vm_id     = var.config.vm_id
 
   clone {
-    vm_id = var.template_id
+    vm_id = var.config.template_id
     full  = false
   }
 
   cpu {
-    cores = var.cpu_cores
+    cores = var.config.cpu_cores
     type  = "x86-64-v2-AES"
   }
 
   memory {
-    dedicated = var.memory
-    floating  = var.memory
+    dedicated = var.config.memory
+    floating  = var.config.memory
   }
 
   network_device {
-    bridge = "vmbr0"
+    bridge  = "vmbr0"
+    vlan_id = var.config.vlan_id
   }
 
   initialization {
     dns {
-      domain  = "home.shduo.ru"
-      servers = ["10.19.1.1"]
+      domain  = var.config.domain
+      servers = var.config.dns_servers
     }
 
     ip_config {
       ipv4 {
-        address = var.ip_cidr
-        gateway = "10.19.1.1"
+        address = var.config.ip_cidr
+        gateway = var.config.gateway
       }
     }
 
     user_account {
-      username = "deploy"
-      keys     = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDIZak62dHFoQL3Co/XYs8SC6Lc/FnCT8xOiHu2SJAWO"]
+      username = var.config.username
+      keys     = var.config.ssh_keys
     }
   }
 }

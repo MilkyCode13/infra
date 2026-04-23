@@ -1,0 +1,3 @@
+---
+pve_vm_image_storage: ssd
+pve_vm_disk_storage: ssd

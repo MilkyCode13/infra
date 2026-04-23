@@ -1,5 +1,5 @@
 ---
 - name: Apply Kubernetes nodes
-  hosts: k8s
+  hosts: k8s_nodes
   roles:
     - k8s

@@ -1,8 +1,9 @@
-pve:
+pve_nodes:
   hosts:
     nas:
+    xeon:
 
-k8s:
+k8s_nodes:
   children:
     k8s_master:
       hosts:

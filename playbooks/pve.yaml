@@ -1,5 +1,5 @@
 ---
 - name: Apply proxmox nodes
-  hosts: pve
+  hosts: pve_nodes
   roles:
     - pve

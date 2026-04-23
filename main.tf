@@ -1,5 +1,5 @@
-variable "pve_token" {
-  type      = string
+variable "pve_tokens" {
+  type      = map(string)
   sensitive = true
   ephemeral = true
 }
@@ -11,9 +11,17 @@ variable "openwrt_password" {
 }
 
 provider "proxmox" {
+  alias     = "nas"
   endpoint  = "https://nas.home.shduo.ru:8006/api2/json"
   insecure  = true
-  api_token = var.pve_token
+  api_token = var.pve_tokens.nas
+}
+
+provider "proxmox" {
+  alias     = "xeon"
+  endpoint  = "https://xeon.home.shduo.ru:8006/api2/json"
+  insecure  = true
+  api_token = var.pve_tokens.xeon
 }
 
 provider "openwrt" {
@@ -22,31 +30,124 @@ provider "openwrt" {
   password = var.openwrt_password
 }
 
+variable "networks" {
+  type = map(object({
+    vlan_id     = number
+    domain      = string
+    dns_servers = list(string)
+    gateway     = string
+  }))
+  default = {
+    "mgmt" = {
+      vlan_id     = 1
+      domain      = "home.shduo.ru"
+      dns_servers = ["10.19.1.1"]
+      gateway     = "10.19.1.1"
+    }
+  }
+}
+
+variable "vms" {
+  type = map(object({
+    node      = string
+    vm_id     = number
+    cpu_cores = number
+    memory    = number
+    network   = string
+    ip_cidr   = string
+  }))
+  default = {
+    "kube-master1" = {
+      node      = "nas"
+      vm_id     = 101
+      cpu_cores = 4
+      memory    = 4096
+      network   = "mgmt"
+      ip_cidr   = "10.19.1.21/24"
+    }
+    "kube-node1" = {
+      node      = "nas"
+      vm_id     = 201
+      cpu_cores = 8
+      memory    = 8192
+      network   = "mgmt"
+      ip_cidr   = "10.19.1.31/24"
+    }
+  }
+}
+
+variable "ssh_keys" {
+  type    = list(string)
+  default = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDIZak62dHFoQL3Co/XYs8SC6Lc/FnCT8xOiHu2SJAWO"]
+}
+
 resource "openwrt_dhcp_domain" "kube_master" {
   name = "kube-master"
-  ip = "10.19.1.20"
+  ip   = "10.19.1.20"
 }
 
-module "kube_master1" {
-  source = "./modules/vm"
-
-  name = "kube-master1"
-  node = "nas"
-  vm_id = 101
-  template_id = 9001
-  cpu_cores = 4
-  memory = 4096
-  ip_cidr = "10.19.1.21/24"
+locals {
+  nodes = ["nas", "xeon"]
+  vms_by_node = {
+    for node in local.nodes : node => {
+      for name, vm in var.vms : name => vm
+      if node == vm.node
+    }
+  }
 }
 
-module "kube_node1" {
-  source = "./modules/vm"
+module "vm_nas" {
+  for_each = local.vms_by_node["nas"]
 
-  name = "kube-node1"
-  node = "nas"
-  vm_id = 201
-  template_id = 9001
-  cpu_cores = 8
-  memory = 8192
-  ip_cidr = "10.19.1.31/24"
+  source = "./modules/vm"
+  providers = {
+    proxmox = proxmox.nas
+  }
+
+  name = each.key
+  config = {
+    node        = each.value.node
+    vm_id       = each.value.vm_id
+    template_id = 9001
+    cpu_cores   = each.value.cpu_cores
+    memory      = each.value.memory
+    ip_cidr     = each.value.ip_cidr
+    domain      = var.networks[each.value.network].domain
+    dns_servers = var.networks[each.value.network].dns_servers
+    gateway     = var.networks[each.value.network].gateway
+    ssh_keys    = var.ssh_keys
+  }
+}
+
+module "vm_xeon" {
+  for_each = local.vms_by_node["xeon"]
+
+  source = "./modules/vm"
+  providers = {
+    proxmox = proxmox.xeon
+  }
+
+  name = each.key
+  config = {
+    node        = each.value.node
+    vm_id       = each.value.vm_id
+    template_id = 9001
+    cpu_cores   = each.value.cpu_cores
+    memory      = each.value.memory
+    ip_cidr     = each.value.ip_cidr
+    domain      = var.networks[each.value.network].domain
+    dns_servers = var.networks[each.value.network].dns_servers
+    gateway     = var.networks[each.value.network].gateway
+    ssh_keys    = var.ssh_keys
+  }
+}
+
+moved {
+  from = module.kube_master1
+  to   = module.vm_nas["kube-master1"]
+}
+
+moved {
+  from = module.kube_node1
+  to   = module.vm_nas["kube-node1"]
 }
