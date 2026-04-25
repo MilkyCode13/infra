@@ -16,5 +16,6 @@ variable "config" {
     vlan_id = optional(number)
     username = optional(string, "deploy")
     ssh_keys = list(string)
+    hostname = optional(string)
   })
 }

@@ -32,17 +32,22 @@ provider "openwrt" {
 
 variable "networks" {
   type = map(object({
-    vlan_id     = number
+    vlan_id     = optional(number)
     domain      = string
     dns_servers = list(string)
     gateway     = string
   }))
   default = {
     "mgmt" = {
-      vlan_id     = 1
       domain      = "home.shduo.ru"
       dns_servers = ["10.19.1.1"]
       gateway     = "10.19.1.1"
+    }
+    "test-mgmt" = {
+      vlan_id     = 201
+      domain      = "test.shduo.ru"
+      dns_servers = ["10.19.201.1"]
+      gateway     = "10.19.201.1"
     }
   }
 }
@@ -55,6 +60,7 @@ variable "vms" {
     memory    = number
     network   = string
     ip_cidr   = string
+    hostname  = optional(string)
   }))
   default = {
     "kube-master1" = {
@@ -73,6 +79,24 @@ variable "vms" {
       network   = "mgmt"
       ip_cidr   = "10.19.1.31/24"
     }
+    "ipa1-test" = {
+      node      = "xeon"
+      vm_id     = 2001
+      cpu_cores = 2
+      memory    = 2048
+      network   = "test-mgmt"
+      ip_cidr   = "10.19.201.11/24"
+      hostname  = "ipa1"
+    }
+    "ipa2-test" = {
+      node      = "xeon"
+      vm_id     = 2002
+      cpu_cores = 2
+      memory    = 2048
+      network   = "test-mgmt"
+      ip_cidr   = "10.19.201.12/24"
+      hostname  = "ipa2"
+    }
   }
 }
 
@@ -88,58 +112,49 @@ resource "openwrt_dhcp_domain" "kube_master" {
 
 locals {
   nodes = ["nas", "xeon"]
-  vms_by_node = {
+  vm_configs = {
     for node in local.nodes : node => {
-      for name, vm in var.vms : name => vm
+      for name, vm in var.vms : name => {
+        node        = vm.node
+        vm_id       = vm.vm_id
+        template_id = 9001
+        cpu_cores   = vm.cpu_cores
+        memory      = vm.memory
+        ip_cidr     = vm.ip_cidr
+        vlan_id     = var.networks[vm.network].vlan_id
+        domain      = var.networks[vm.network].domain
+        dns_servers = var.networks[vm.network].dns_servers
+        gateway     = var.networks[vm.network].gateway
+        ssh_keys    = var.ssh_keys
+        hostname    = vm.hostname
+      }
       if node == vm.node
     }
   }
 }
 
 module "vm_nas" {
-  for_each = local.vms_by_node["nas"]
+  for_each = local.vm_configs["nas"]
 
   source = "./modules/vm"
   providers = {
     proxmox = proxmox.nas
   }
 
-  name = each.key
-  config = {
-    node        = each.value.node
-    vm_id       = each.value.vm_id
-    template_id = 9001
-    cpu_cores   = each.value.cpu_cores
-    memory      = each.value.memory
-    ip_cidr     = each.value.ip_cidr
-    domain      = var.networks[each.value.network].domain
-    dns_servers = var.networks[each.value.network].dns_servers
-    gateway     = var.networks[each.value.network].gateway
-    ssh_keys    = var.ssh_keys
-  }
+  name   = each.key
+  config = each.value
 }
 
 module "vm_xeon" {
-  for_each = local.vms_by_node["xeon"]
+  for_each = local.vm_configs["xeon"]
 
   source = "./modules/vm"
   providers = {
     proxmox = proxmox.xeon
   }
 
-  name = each.key
-  config = {
-    node        = each.value.node
-    vm_id       = each.value.vm_id
-    template_id = 9001
-    cpu_cores   = each.value.cpu_cores
-    memory      = each.value.memory
-    ip_cidr     = each.value.ip_cidr
-    domain      = var.networks[each.value.network].domain
-    dns_servers = var.networks[each.value.network].dns_servers
-    gateway     = var.networks[each.value.network].gateway
-    ssh_keys    = var.ssh_keys
-  }
+  name   = each.key
+  config = each.value
 }
 
 moved {

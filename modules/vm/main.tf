@@ -1,5 +1,5 @@
 resource "openwrt_dhcp_domain" "dns" {
-  name = var.name
+  name = "${coalesce(var.config.hostname, var.name)}.${var.config.domain}."
   ip   = split("/", var.config.ip_cidr)[0]
 }
 
